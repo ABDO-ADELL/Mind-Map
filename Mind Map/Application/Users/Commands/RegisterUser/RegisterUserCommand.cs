@@ -10,4 +10,5 @@ public class RegisterUserCommand : IRequest<int>
     public int Age { get; set; }
     public string Gender { get; set; } = string.Empty;
 
+
 }

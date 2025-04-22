@@ -2,7 +2,6 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Mind_Map.Models;
 using System.IdentityModel.Tokens.Jwt;
@@ -15,75 +14,53 @@ namespace Mind_Map.Application.Users.Commands.LoginUser
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
-        private readonly ILogger<LoginUserHandler> _logger;
-
-        public LoginUserHandler(
-            AppDbContext context,
-            IConfiguration configuration,
-            ILogger<LoginUserHandler> logger)
+        private static bool IsValidEmail(string email)
+        {
+            return !string.IsNullOrWhiteSpace(email) &&
+                   email.Contains('@') &&
+                   email.Contains('.') &&
+                   email.IndexOf('@') < email.LastIndexOf('.');
+        }
+        public LoginUserHandler(AppDbContext context, IConfiguration configuration)
         {
             _context = context;
             _configuration = configuration;
-            _logger = logger;
         }
 
         public async Task<string?> Handle(LoginUserCommand request, CancellationToken cancellationToken)
         {
-            try
-            {
-                var user = await _context.Users
-                    .FirstOrDefaultAsync(u => u.Email == request.Email, cancellationToken);
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email == request.Email.Trim().ToLower(), cancellationToken);
 
-                if (user == null || !VerifyPassword(request.Password, user.PasswordHash))
-                {
-                    _logger.LogWarning("Failed login attempt for email: {Email}", request.Email);
-                    return null;
-                }
-
-                return GenerateJwtToken(user);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during login for email: {Email}", request.Email);
+            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password.Trim(), user.PasswordHash))
                 return null;
-            }
-        }
-        
-        private bool VerifyPassword(string inputPassword, string storedHash)
-        {
-            try
-            {
-                return BCrypt.Net.BCrypt.Verify(inputPassword, storedHash);
-            }
-            catch
-            {
-                return false;
-            }
+
+            return GenerateJwtToken(user);
         }
 
         private string GenerateJwtToken(User user)
         {
-            var jwtSettings = _configuration.GetSection("JwtSettings");
             var key = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtSettings["Secret"] ?? throw new ArgumentException("JWT Secret is missing")));
+                Encoding.UTF8.GetBytes(_configuration["JwtSettings:Secret"]));
 
-            var claims = new[]
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(ClaimTypes.Name, user.Name),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-            };
+            // Use ExpirationMinutes from appsettings.json
+            var expirationMinutes = int.Parse(_configuration["JwtSettings:ExpirationMinutes"]);
 
             var token = new JwtSecurityToken(
-                issuer: jwtSettings["Issuer"],
-                audience: jwtSettings["Audience"],
-                claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(Convert.ToDouble(jwtSettings["ExpirationMinutes"] ?? "30")),
+                issuer: _configuration["JwtSettings:Issuer"],
+                audience: _configuration["JwtSettings:Audience"],
+                claims: new[]
+                {
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()), // Subject - User ID
+            new Claim(JwtRegisteredClaimNames.Email, user.Email), // Optional - User Email
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()) // NameIdentifier for Authorization
+                },
+                expires: DateTime.UtcNow.AddMinutes(expirationMinutes),
                 signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256)
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
     }
 }

@@ -11,5 +11,10 @@
 
         public string? PersonalityType { get; set; }
 
+        public string? EmailVerificationToken { get; set; }
+        public bool IsEmailVerified { get; set; } = false;
+        
+            public DateTime CreatedAt { get; set; }
+        
     }
 }

@@ -1,17 +1,18 @@
 ﻿namespace Mind_Map.Application.Quiz.Commands.SubmitPersonalityTest
 {
-    using Mind_Map.Models;
     using MediatR;
+    using System.Collections.Generic;
 
     public class SubmitPersonalityTestCommand : IRequest<TestResultDto>
     {
         public int UserId { get; set; }
-        public List<AnswerDto> Answers { get; set; } = new();
+        public List<int> Answers { get; set; } = new List<int>();
     }
 
-    public class AnswerDto
+    public class TestResultDto
     {
-        public int TraitId { get; set; } // Which trait this answer affects
-        public int Score { get; set; }   // Score for this trait (-3 to +3)
+        public int UserId { get; set; }
+        public string PersonalityType { get; set; }
+        public Dictionary<string, int> TraitPercentages { get; set; } = new Dictionary<string, int>();
     }
 }

@@ -6,6 +6,7 @@ namespace Mind_Map.Controllers
     using MediatR;
     using Microsoft.AspNetCore.Mvc;
     using Mind_Map.Application.Users.Commands.LoginUser;
+    using Mind_Map.Models;
 
     [Route("api/users")]
     [ApiController]
@@ -36,7 +37,32 @@ namespace Mind_Map.Controllers
 
             return Ok(new { Token = token });
         }
+        [ApiController]
+        [Route("api/auth")]
+        public class AuthController : ControllerBase
+        {
+            private readonly AppDbContext _context;
 
+            public AuthController(AppDbContext context)
+            {
+                _context = context;
+            }
+
+            [HttpGet("verify-email")]
+            public async Task<IActionResult> VerifyEmail([FromQuery] string token)
+            {
+                var user =  _context.Users
+                    .FirstOrDefault(u => u.EmailVerificationToken == token);
+
+                if (user == null) return BadRequest("Invalid token");
+
+                user.IsEmailVerified = true;
+                user.EmailVerificationToken = null; // Clear token after verification
+                await _context.SaveChangesAsync();
+
+                return Ok("Email verified successfully");
+            }
+        }
     }
 
 
